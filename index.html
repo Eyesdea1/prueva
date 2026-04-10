@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>NO DEBERÍAS ESTAR AQUÍ</title>
+    <style>
+        :root {
+            --bg: #030000;
+            --blood: #600;
+            --glitch-color: #300;
+        }
+
+        * { box-sizing: border-box; cursor: crosshair; }
+        
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: #555;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            /* Temblor constante muy sutil para incomodar */
+            animation: shake 10s infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0,0); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-1px, 1px); }
+            20%, 40%, 60%, 80% { transform: translate(1px, -1px); }
+        }
+
+        /* Capa de estática de TV */
+        .static {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://media.giphy.com/media/oEI9uWUic9ZqU/giphy.gif');
+            opacity: 0.05; pointer-events: none; z-index: 20;
+        }
+
+        /* El contenedor que parece fallar */
+        .main-frame {
+            width: 850px;
+            height: 500px;
+            background: #000;
+            border: 1px solid #200;
+            display: flex;
+            position: relative;
+            box-shadow: 0 0 100px #000;
+            z-index: 10;
+        }
+
+        /* Personaje con efecto glitch */
+        .character-box {
+            flex: 1;
+            background: #050505;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            border-right: 1px solid #100;
+        }
+
+        .character-box img {
+            width: 80%;
+            filter: grayscale(1) contrast(2) brightness(0.5);
+            image-rendering: pixelated;
+            animation: glitch-anim 5s infinite;
+        }
+
+        @keyframes glitch-anim {
+            0% { transform: translate(0); filter: hue-rotate(0deg); }
+            2% { transform: translate(-5px, 2px); filter: invert(1); }
+            4% { transform: translate(5px, -2px); }
+            6% { transform: translate(0); filter: none; }
+            100% { transform: translate(0); }
+        }
+
+        .content-box {
+            flex: 1.5;
+            padding: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: var(--blood);
+            letter-spacing: 15px;
+            text-align: center;
+            margin: 0;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        #text-display {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #888;
+            height: 150px;
+            text-shadow: 1px 1px 5px #000;
+        }
+
+        .controls-list {
+            font-size: 11px;
+            color: #333;
+            border-top: 1px solid #111;
+            padding-top: 10px;
+        }
+
+        .btn-start {
+            background: transparent;
+            color: #400;
+            border: 1px solid #400;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            letter-spacing: 5px;
+            transition: 0.5s;
+        }
+
+        .btn-start:hover {
+            background: #400;
+            color: #fff;
+            box-shadow: 0 0 30px #f00;
+            letter-spacing: 10px;
+        }
+
+        /* Botón de emergencia para el audio */
+        #audio-fix {
+            position: fixed; bottom: 10px; left: 10px;
+            background: none; border: none; color: #111; font-size: 10px; z-index: 100;
+        }
+
+        .vignette {
+            position: absolute; inset: 0;
+            background: radial-gradient(circle, transparent 20%, #000 100%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="static"></div>
+    <button id="audio-fix" onclick="fixAudio()">[ SOLUCIONAR AUDIO ]</button>
+
+    <div class="main-frame">
+        <div class="vignette"></div>
+
+        <div class="character-box">
+            <img src="inicio.jpg" id="guide" alt="?">
+        </div>
+
+        <div class="content-box">
+            <h1 id="title">VACÍO</h1>
+            
+            <div id="text-display"></div>
+
+            <div class="controls-list">
+                MOVERSE: [W][A][S][D] <br>
+                CORRER:  [SHIFT] <br>
+                EXTRAER: [CLICK EN EL OJO]
+            </div>
+
+            <button class="btn-start" onclick="go()">ENTRAR</button>
+        </div>
+    </div>
+
+    <audio id="bgm" src="So.mp3" loop></audio>
+
+    <script>
+        const bgm = document.getElementById('bgm');
+        const textDisplay = document.getElementById('text-display');
+        const title = document.getElementById('title');
+
+        // Frases para incomodar al usuario
+        const messages = [
+            "Algo aquí aprendió a esperarteNo tiene prisa No necesita hacerlo Sabe exactamente cuánto tiempo puedes fingir que esto no es real.",
+           
+        ];
+
+        // Función para escribir texto tipo máquina de escribir
+        let charIndex = 0;
+        let currentMsg = messages[Math.floor(Math.random() * messages.length)];
+
+        function typeWriter() {
+            if (charIndex < currentMsg.length) {
+                textDisplay.innerHTML += currentMsg.charAt(charIndex);
+                charIndex++;
+                setTimeout(typeWriter, 50);
+            }
+        }
+
+        // SOLUCIÓN DEFINITIVA DE AUDIO
+        function fixAudio() {
+            bgm.play();
+            document.getElementById('audio-fix').style.display = 'none';
+        }
+
+        // Iniciar audio al primer click o tecla
+        document.body.addEventListener('click', fixAudio, { once: true });
+        document.body.addEventListener('keydown', fixAudio, { once: true });
+
+        function go() {
+            title.innerHTML = "ADIÓS";
+            document.body.style.filter = "invert(1) contrast(5)";
+            setTimeout(() => {
+                window.location.href = "prueva.html"; // Cambia esto al nombre de tu archivo de juego
+            }, 1000);
+        }
+
+        // Cambiar el título aleatoriamente para asustar
+        setInterval(() => {
+            const glitchTitles = ["MÍRAME", "VACÍO", "AYUDA", "CORRE"];
+            if(Math.random() > 0.9) {
+                title.innerHTML = glitchTitles[Math.floor(Math.random()*glitchTitles.length)];
+                setTimeout(() => title.innerHTML = "VACÍO", 100);
+            }
+        }, 2000);
+
+        window.onload = typeWriter;
+    </script>
+</body>
+</html>
