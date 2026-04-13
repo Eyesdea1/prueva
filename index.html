@@ -7,7 +7,7 @@
     <style>
         :root {
             --bg: #030000;
-            --blood: #600;
+            --blood: #800; /* Un rojo un poco más vivo para que resalte */
             --glitch-color: #300;
         }
 
@@ -81,49 +81,61 @@
 
         .content-box {
             flex: 1.5;
-            padding: 50px;
+            padding: 40px 50px; /* Ajuste de padding */
             display: flex;
             flex-direction: column;
             justify-content: space-between;
         }
 
         h1 {
-            font-size: 20px;
+            font-size: 24px;
             color: var(--blood);
             letter-spacing: 15px;
             text-align: center;
             margin: 0;
-            text-shadow: 2px 2px 0px #000;
+            text-shadow: 2px 2px 0px #000, 0 0 10px #f00; /* Brillo rojo */
         }
 
         #text-display {
             font-size: 16px;
             line-height: 1.6;
-            color: #888;
-            height: 150px;
+            color: #aaa; /* Más claro para que se lea mejor */
+            height: 140px;
             text-shadow: 1px 1px 5px #000;
         }
 
+        /* --- NUEVO ESTILO DE CONTROLES (MÁS VISIBLE) --- */
         .controls-list {
-            font-size: 11px;
-            color: #333;
-            border-top: 1px solid #111;
-            padding-top: 10px;
+            font-size: 14px;
+            color: #ccc; /* Gris claro */
+            background: rgba(20, 0, 0, 0.6); /* Fondo semi transparente rojizo */
+            border: 1px solid #400; /* Borde rojo oscuro */
+            padding: 15px;
+            line-height: 1.8;
+            box-shadow: inset 0 0 10px #000;
+        }
+
+        /* Resaltamos las teclas específicas en rojo */
+        .controls-list span {
+            color: #f00;
+            font-weight: bold;
+            letter-spacing: 2px;
         }
 
         .btn-start {
             background: transparent;
-            color: #400;
-            border: 1px solid #400;
+            color: #600;
+            border: 1px solid #600;
             padding: 15px;
             font-family: 'Courier New', monospace;
             font-weight: bold;
             letter-spacing: 5px;
-            transition: 0.5s;
+            transition: 0.3s;
+            margin-top: 10px;
         }
 
         .btn-start:hover {
-            background: #400;
+            background: #600;
             color: #fff;
             box-shadow: 0 0 30px #f00;
             letter-spacing: 10px;
@@ -132,8 +144,9 @@
         /* Botón de emergencia para el audio */
         #audio-fix {
             position: fixed; bottom: 10px; left: 10px;
-            background: none; border: none; color: #111; font-size: 10px; z-index: 100;
+            background: none; border: none; color: #333; font-size: 12px; z-index: 100;
         }
+        #audio-fix:hover { color: #800; }
 
         .vignette {
             position: absolute; inset: 0;
@@ -145,7 +158,7 @@
 <body>
 
     <div class="static"></div>
-    <button id="audio-fix" onclick="fixAudio()">[ SOLUCIONAR AUDIO ]</button>
+    <button id="audio-fix" onclick="fixAudio()">[ INICIAR AUDIO ]</button>
 
     <div class="main-frame">
         <div class="vignette"></div>
@@ -160,9 +173,9 @@
             <div id="text-display"></div>
 
             <div class="controls-list">
-                MOVERSE: [W][A][S][D] <br>
-                CORRER:  [SHIFT] <br>
-                EXTRAER: [CLICK EN EL OJO]
+                <span>[W] [A] [S] [D]</span> - CAMINAR POR LA OSCURIDAD <br>
+                <span>[SHIFT]</span> - CORRER POR TU VIDA <br>
+                <span>[CLICK]</span> - EXTRAER EL OJO
             </div>
 
             <button class="btn-start" onclick="go()">ENTRAR</button>
@@ -176,10 +189,11 @@
         const textDisplay = document.getElementById('text-display');
         const title = document.getElementById('title');
 
-        // Frases para incomodar al usuario
+        // Frases para incomodar al usuario (usamos tu frase mejorada y unas nuevas)
         const messages = [
-            "Algo aquí aprendió a esperarteNo tiene prisa No necesita hacerlo Sabe exactamente cuánto tiempo puedes fingir que esto no es real.",
-           
+            "Algo aquí aprendió a esperarte,.<br><br>No tiene prisa. No necesita hacerlo.<br>Sabe exactamente cuánto tiempo puedes fingir que esto no es real.",
+            "Detrás de tu pantalla te sientes a salvo.<br><br>Gael... las sombras de este código no se quedan solo en el monitor.",
+            "Tus pasos hacen ruido.<br>A él le gusta ese ruido.<br><br>Entra, si te atreves."
         ];
 
         // Función para escribir texto tipo máquina de escribir
@@ -188,27 +202,36 @@
 
         function typeWriter() {
             if (charIndex < currentMsg.length) {
-                textDisplay.innerHTML += currentMsg.charAt(charIndex);
-                charIndex++;
-                setTimeout(typeWriter, 50);
+                // Si encontramos un <br>, avanzamos 4 caracteres de golpe
+                if (currentMsg.substr(charIndex, 4) === '<br>') {
+                    textDisplay.innerHTML += '<br>';
+                    charIndex += 4;
+                } else {
+                    textDisplay.innerHTML += currentMsg.charAt(charIndex);
+                    charIndex++;
+                }
+                
+                // Variar un poco la velocidad de escritura para hacerlo más tétrico
+                let speed = Math.random() * 50 + 30; 
+                setTimeout(typeWriter, speed);
             }
         }
 
         // SOLUCIÓN DEFINITIVA DE AUDIO
         function fixAudio() {
-            bgm.play();
+            bgm.play().catch(e => console.log("Esperando interacción para audio..."));
             document.getElementById('audio-fix').style.display = 'none';
         }
 
-        // Iniciar audio al primer click o tecla
+        // Iniciar audio al primer click o tecla en cualquier parte de la pantalla
         document.body.addEventListener('click', fixAudio, { once: true });
         document.body.addEventListener('keydown', fixAudio, { once: true });
 
         function go() {
-            title.innerHTML = "ADIÓS";
+            title.innerHTML = "TE VEO";
             document.body.style.filter = "invert(1) contrast(5)";
             setTimeout(() => {
-                window.location.href = "prueva.html"; // Cambia esto al nombre de tu archivo de juego
+                window.location.href = "prueva1.html"; // Tu archivo de destino
             }, 1000);
         }
 
@@ -221,7 +244,9 @@
             }
         }, 2000);
 
-        window.onload = typeWriter;
+        window.onload = () => {
+            setTimeout(typeWriter, 1000); // Esperar un segundo antes de empezar a escribir
+        };
     </script>
 </body>
 </html>
