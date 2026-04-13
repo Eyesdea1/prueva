@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Casa - Arreglado</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; user-select: none; }
+    canvas#game { display: block; filter: brightness(1.1) contrast(1.1); }
+    #vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.7) 100%); pointer-events: none; z-index: 5; }
+    #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; }
+    #startBtn { padding: 15px 40px; font-size: 24px; background: #400; color: white; border: 2px solid #600; cursor: pointer; margin-top: 20px; }
+    #hud { position: absolute; bottom: 0; left: 0; width: 100%; height: 130px; background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); display: none; align-items: center; padding: 20px; color: white; z-index: 10; }
+    .bar-bg { width: 300px; height: 12px; background: #111; border: 1px solid #333; margin-bottom: 15px; }
+    .bar-fill { height: 100%; transition: width 0.2s; }
+    #eyeMinigame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 0, 0, 0.9); z-index: 150; display: none; cursor: crosshair; }
+    #theEye { position: absolute; width: 80px; height: 80px; background: radial-gradient(circle at center, #000 10%, #f00 15%, #fff 40%, #ffaaaa 100%); border-radius: 50%; box-shadow: 0 0 30px #f00; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    #videoContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 300; display: none; }
+    #winVideo { width: 100%; height: 100%; object-fit: cover; }
+    #minimap { position: absolute; top: 20px; right: 20px; border: 2px solid #555; background: rgba(0,0,0,0.9); z-index: 10; display: none; width: 120px; height: 120px; }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1 style="color: #a00;">LA CASA</h1>
+    <p>Busca las llaves (puntos rojos en el mapa).</p>
+    <button id="startBtn">ADENTRARSE</button>
+</div>
+
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+<canvas id="minimap" width="120" height="120"></canvas>
+
+<div id="eyeMinigame"><div id="theEye"></div></div>
+
+<div id="hud">
+    <div style="margin-left: 20px;">
+        <div class="bar-bg"><div id="staminaBar" class="bar-fill" style="background: #444; width: 100%;"></div></div>
+        <div id="keysDisplay" style="color:red; font-weight:bold;">LLAVES: 0 / 3</div>
+    </div>
+</div>
+
+<div id="videoContainer"><video id="winVideo" src="SELENEDELGADOLOPEZ.mp4"></video></div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const mtx = document.getElementById("minimap").getContext("2d");
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+
+const imgMonstruo = new Image(); imgMonstruo.src = "Moustro.jpg";
+const imgLlave = new Image(); imgLlave.src = "llave.jpg";
+const musicaFondo = new Audio("musicadondo1.mp3"); musicaFondo.loop = true;
+
+const map = [
+    [1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,2,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,1,0,0,0,1,0,1],
+    [1,1,0,1,1,2,0,1,0,1],
+    [1,0,0,0,0,1,0,0,0,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,1,2,0,3,0,1,0,1],
+    [1,0,0,0,0,0,0,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1]
+];
+
+const torches = [{x:1.5, y:1.5}, {x:8.5, y:1.5}, {x:4.5, y:4.5}, {x:1.5, y:8.5}, {x:7.5, y:8.5}];
+let player = { x: 1.5, y: 7.5, angle: 0, stamina: 100, isDead: false };
+let monster = { x: 8, y: 8, speed: 0.007 };
+let keysCollected = 0;
+let isPaused = false;
+let keys = {};
+let zBuffer = [];
+
+window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+document.getElementById("startBtn").addEventListener("click", () => {
+    document.getElementById("startScreen").style.display = "none";
+    document.getElementById("hud").style.display = "flex";
+    document.getElementById("minimap").style.display = "block";
+    musicaFondo.play();
+    requestAnimationFrame(loop);
+});
+
+function draw3D() {
+    ctx.fillStyle = "#1a1512"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+    ctx.fillStyle = "#151515"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+    const numRays = canvas.width / 4;
+    const rayWidth = canvas.width / numRays;
+
+    for (let i = 0; i < numRays; i++) {
+        let rayAngle = player.angle - (Math.PI/6) + (i / numRays) * (Math.PI/3);
+        let dist = 0, x = player.x, y = player.y, cell = 0, hitX, hitY;
+        while (dist < 12) {
+            x += Math.cos(rayAngle) * 0.05; y += Math.sin(rayAngle) * 0.05; dist += 0.05;
+            let mx = Math.floor(x), my = Math.floor(y);
+            if (map[my][mx] === 1 || map[my][mx] === 3) { cell = map[my][mx]; hitX = x; hitY = y; break; }
+        }
+        zBuffer[i] = dist;
+        let wallHeight = canvas.height / dist;
+        let light = 0.3 + Math.max(0, 1.0 - (dist / 6));
+        torches.forEach(t => { light += Math.max(0, 1.8 - (Math.hypot(hitX - t.x, hitY - t.y) * 1.0)); });
+        let dim = Math.max(0.1, 1 - dist/11);
+        let r = cell === 3 ? 100 : 200, g = cell === 3 ? 50 : 140, b = cell === 3 ? 20 : 60;
+        ctx.fillStyle = `rgb(${r*light*dim}, ${g*light*dim}, ${b*light*dim})`;
+        ctx.fillRect(i * rayWidth, (canvas.height - wallHeight)/2, rayWidth + 1, wallHeight);
+    }
+}
+
+function drawSprite(objX, objY, img) {
+    let dx = objX - player.x, dy = objY - player.y;
+    let dist = Math.hypot(dx, dy), angle = Math.atan2(dy, dx) - player.angle;
+    if (angle < -Math.PI) angle += Math.PI * 2; if (angle > Math.PI) angle -= Math.PI * 2;
+    if (Math.abs(angle) < Math.PI/3 && dist < 12) {
+        let screenX = (0.5 * (angle / (Math.PI/6)) + 0.5) * canvas.width;
+        let h = canvas.height / dist;
+        ctx.globalAlpha = Math.max(0.2, 1 - dist/10);
+        if (img.complete) ctx.drawImage(img, screenX - h/2, (canvas.height-h)/2, h, h);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+function update() {
+    if (player.isDead || isPaused) return;
+    let speed = keys["shift"] && player.stamina > 0 ? 0.07 : 0.04;
+    if (keys["shift"] && player.stamina > 0) player.stamina -= 0.8; else player.stamina = Math.min(100, player.stamina + 0.3);
+    document.getElementById("staminaBar").style.width = player.stamina + "%";
+
+    let nx = player.x + (keys["w"] ? Math.cos(player.angle)*speed : keys["s"] ? -Math.cos(player.angle)*speed : 0);
+    let ny = player.y + (keys["w"] ? Math.sin(player.angle)*speed : keys["s"] ? -Math.sin(player.angle)*speed : 0);
+    if (keys["a"]) player.angle -= 0.05; if (keys["d"]) player.angle += 0.05;
+
+    // COLISIÓN CORREGIDA: Solo bloquea el paso si es una pared (1) o la salida (3) sin llaves
+    let targetCell = map[Math.floor(ny)][Math.floor(nx)];
+    if (targetCell !== 1) {
+        if (targetCell === 3) {
+            if (keysCollected >= 3) triggerWin(); // Si tiene llaves, gana al tocar la puerta
+        } else {
+            player.x = nx; player.y = ny;
+        }
+    }
+
+    // Activar minijuego si estás parado sobre una llave (2)
+    let px = Math.floor(player.x), py = Math.floor(player.y);
+    if (map[py][px] === 2) startEye(px, py);
+
+    // IA Monstruo
+    let mdx = player.x - monster.x, mdy = player.y - monster.y, mdist = Math.hypot(mdx, mdy);
+    monster.x += (mdx/mdist) * monster.speed; monster.y += (mdy/mdist) * monster.speed;
+    if (mdist < 0.4) { player.isDead = true; alert("GAME OVER"); location.reload(); }
+}
+
+function startEye(x, y) {
+    isPaused = true;
+    const ui = document.getElementById("eyeMinigame");
+    ui.style.display = "block";
+    document.getElementById("theEye").onclick = () => {
+        ui.style.display = "none"; isPaused = false;
+        map[y][x] = 0; keysCollected++;
+        document.getElementById("keysDisplay").innerText = `LLAVES: ${keysCollected} / 3`;
+    };
+}
+
+function triggerWin() {
+    player.isDead = true; musicaFondo.pause();
+    document.getElementById("videoContainer").style.display = "block";
+    const video = document.getElementById("winVideo");
+    video.play(); video.onended = () => { window.location.href = "nivel1.html"; };
+}
+
+function loop() {
+    if (player.isDead) return;
+    update(); draw3D();
+    for(let y=0; y<map.length; y++) for(let x=0; x<map[y].length; x++) if(map[y][x] === 2) drawSprite(x+0.5, y+0.5, imgLlave);
+    drawSprite(monster.x, monster.y, imgMonstruo);
+    // Minimapa
+    mtx.fillStyle = "#000"; mtx.fillRect(0,0,120,120);
+    let s = 12;
+    for(let y=0; y<10; y++) for(let x=0; x<10; x++) {
+        if(map[y][x] === 1) mtx.fillStyle = "#444";
+        else if(map[y][x] === 2) mtx.fillStyle = "red";
+        else if(map[y][x] === 3) mtx.fillStyle = "green";
+        else continue;
+        mtx.fillRect(x*s, y*s, s, s);
+    }
+    mtx.fillStyle = "white"; mtx.fillRect(player.x*s-2, player.y*s-2, 4, 4);
+    requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

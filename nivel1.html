@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Casa Claustrofóbica</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; color: white; }
+
+    /* --- INTRO SECUENCIA --- */
+    #introContainer {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 5000; display: flex; justify-content: center; align-items: center;
+        background-size: cover; background-position: center;
+    }
+    .intro-img-center {
+        position: absolute; width: 250px; height: 250px; object-fit: cover;
+        box-shadow: 0 0 50px rgba(0,0,0,0.8); z-index: 5001; border: 2px solid white;
+    }
+
+    /* --- INTERFAZ (HUD) --- */
+    #hud {
+        position: absolute; bottom: 0; left: 0; width: 100%; height: 120px;
+        background: linear-gradient(to top, rgba(0,0,0,1) 30%, transparent 100%);
+        z-index: 100; display: flex; flex-direction: column; padding: 10px 30px;
+    }
+    .bar-container { width: 250px; margin-bottom: 8px; }
+    .bar-label { font-size: 10px; margin-bottom: 2px; color: #aaa; letter-spacing: 1px; }
+    .bar-bg { width: 100%; height: 8px; background: #111; border: 1px solid #444; }
+    .bar-fill { height: 100%; transition: width 0.1s; }
+    
+    #counter {
+        position: absolute; top: 20px; left: 20px; font-size: 16px;
+        color: #ff3333; text-shadow: 2px 2px 5px black; z-index: 101;
+        background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 4px;
+    }
+
+    /* --- MINIMAPA PEQUEÑO --- */
+    #minimap {
+        position: absolute; top: 20px; right: 20px;
+        border: 1px solid #555; background: rgba(0,0,0,0.8);
+        z-index: 101; opacity: 0.7; width: 100px; height: 100px;
+    }
+
+    /* --- JUEGO --- */
+    canvas#game { display: block; filter: brightness(0.8) contrast(1.2); }
+    
+    #interaction {
+        position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%);
+        font-size: 13px; letter-spacing: 2px; display: none; text-align: center;
+        color: yellow; text-shadow: 0 0 10px black;
+    }
+    #dialogue {
+        position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+        width: 70%; background: rgba(0,0,0,0.9); padding: 15px; border: 1px solid #600;
+        display: none; text-align: center; font-style: italic; z-index: 102;
+    }
+
+    /* --- VIDEO FINAL --- */
+    #videoOverlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 6000; display: none; background: #000;
+    }
+    video { width: 100%; height: 100%; object-fit: cover; }
+</style>
+</head>
+<body onclick="playMusic()" onkeydown="playMusic()">
+
+<div id="introContainer">
+    <img id="introSmall" class="intro-img-center" src="" style="display:none;">
+</div>
+
+<div id="counter">CUADROS POR BUSCAR: <span id="countNum">3</span></div>
+
+<div id="hud">
+    <div class="bar-container">
+        <div class="bar-label">VITALIDAD</div>
+        <div class="bar-bg"><div id="healthBar" class="bar-fill" style="background: #a00; width: 100%;"></div></div>
+    </div>
+    <div class="bar-container">
+        <div class="bar-label">ADRENALINA</div>
+        <div class="bar-bg"><div id="staminaBar" class="bar-fill" style="background: #555; width: 100%;"></div></div>
+    </div>
+</div>
+
+<canvas id="minimap" width="100" height="100"></canvas>
+<canvas id="game"></canvas>
+
+<div id="interaction">PRESIONA [ E ] PARA OBSERVAR</div>
+<div id="dialogue"></div>
+
+<div id="videoOverlay">
+    <video id="finalVid" src="video_final.mp4"></video>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const mCanvas = document.getElementById("minimap");
+const mtx = mCanvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const config = {
+    imgBlancoFondo: 'diosfondo.jpg',
+    imgBlancoCentro: 'dios1.jpg',
+    imgNegroFondo: 'fondonuevomalo.jpg',
+    imgNegroCentro: 'fondomalo1.jpg',
+    musica: 'musicadios.mp3',
+    video: 'video_final.mp4'
+};
+
+const musica = new Audio(config.musica);
+musica.loop = true;
+
+// --- MAPA CASA PEQUEÑA (9x9) (1: Pared, 2-4: Cuadros, 9: Salida, 0: Vacío) ---
+const map = [
+    [1,1,1,1,1,1,1,1,1],
+    [1,2,0,1,0,3,0,0,1], // Dos habitaciones arriba
+    [1,1,0,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,1], // Pasillo central
+    [1,1,0,1,1,1,0,1,1],
+    [1,0,0,1,4,1,0,0,1], // Habitación abajo
+    [1,1,0,1,1,1,0,1,1],
+    [1,0,0,0,0,0,0,0,9], // Pasillo y Salida
+    [1,1,1,1,1,1,1,1,1]
+];
+
+// Posiciones de las antorchas para la iluminación (x, y)
+const torches = [
+    {x: 1.5, y: 1.1}, {x: 7.5, y: 1.1}, // Habitaciones arriba
+    {x: 4.5, y: 3.5}, // Pasillo central
+    {x: 3.5, y: 5.5}, // Habitación abajo
+    {x: 8.5, y: 7.5}  // Cerca de la salida
+];
+
+const dataCuadros = {
+    2: "El retrato de un ser divino. Sus ojos parecen juzgar tu alma.",
+    3: "Un espejo roto que refleja una realidad que no es la tuya.",
+    4: "Una inscripción en la pared que dice: 'Solo los que ven todo pueden salir'."
+};
+
+let player = { x: 4.5, y: 7.5, angle: -Math.PI/2, speed: 0.04, stamina: 100, health: 100 };
+let keys = {};
+let gameActive = false;
+let vistos = new Set();
+let totalCuadros = 3;
+let lookingAt = null;
+let musicStarted = false;
+
+// --- FIX PARA LA MÚSICA ---
+function playMusic() {
+    if (!musicStarted) {
+        musica.play().catch(e => console.log("Esperando interacción..."));
+        musicStarted = true;
+    }
+}
+
+window.onload = () => {
+    const intro = document.getElementById("introContainer");
+    const small = document.getElementById("introSmall");
+
+    // FASE 1: LUZ
+    intro.style.backgroundColor = "white";
+    intro.style.backgroundImage = `url(${config.imgBlancoFondo})`;
+    small.src = config.imgBlancoCentro;
+    small.style.display = "block";
+
+    setTimeout(() => {
+        // FASE 2: OSCURIDAD
+        intro.style.backgroundImage = `url(${config.imgNegroFondo})`;
+        intro.style.backgroundColor = "black";
+        small.src = config.imgNegroCentro;
+        
+        setTimeout(() => {
+            intro.style.transition = "opacity 2s";
+            intro.style.opacity = "0";
+            setTimeout(() => {
+                intro.style.display = "none";
+                gameActive = true;
+                loop();
+            }, 2000);
+        }, 4000);
+    }, 4000);
+};
+
+window.onkeydown = e => {
+    playMusic(); // Asegura sonido al presionar teclas
+    keys[e.key.toLowerCase()] = true;
+    if(e.key.toLowerCase() === 'e' && lookingAt) {
+        if(lookingAt === 9 && vistos.size >= totalCuadros) {
+            gameActive = false;
+            document.getElementById("videoOverlay").style.display = "block";
+            document.getElementById("finalVid").play();
+        } else if(dataCuadros[lookingAt]) {
+            vistos.add(lookingAt);
+            document.getElementById("countNum").innerText = totalCuadros - vistos.size;
+            const d = document.getElementById("dialogue");
+            d.innerText = dataCuadros[lookingAt];
+            d.style.display = "block";
+            setTimeout(() => d.style.display = "none", 4000);
+        }
+    }
+};
+window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+
+function draw() {
+    // Techo y Suelo (Súper oscuros)
+    ctx.fillStyle = "#010101"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+    ctx.fillStyle = "#050301"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+
+    const numRays = 400;
+    const FOV = Math.PI / 3;
+    lookingAt = null;
+
+    for (let i = 0; i < numRays; i++) {
+        let rayAngle = player.angle - FOV/2 + (i/numRays) * FOV;
+        let dist = 0;
+        let x = player.x, y = player.y;
+        let cell = 0;
+        let hitX, hitY; // Coordenadas exactas del impacto
+
+        while (dist < 10) {
+            x += Math.cos(rayAngle) * 0.02;
+            y += Math.sin(rayAngle) * 0.02;
+            dist += 0.02;
+            let mx = Math.floor(x), my = Math.floor(y);
+            if (map[my][mx] !== 0) {
+                cell = map[my][mx];
+                hitX = x; hitY = y;
+                break;
+            }
+        }
+
+        let correctedDist = dist * Math.cos(rayAngle - player.angle);
+        let h = canvas.height / correctedDist;
+
+        // --- SISTEMA DE ILUMINACIÓN DE ANTORCHAS ---
+        let baseR = 10, baseG = 10, baseB = 10; // Oscuridad base de la pared
+
+        if (cell === 1) { baseR = 60; baseG = 50; baseB = 40; } // Pared madera
+        else if (cell === 9) { baseR = 20; baseG = 0; baseB = 0; } // Puerta negra
+        else { baseR = 120; baseG = 100; baseB = 40; } // Cuadros dorados
+
+        let finalR = 0, finalG = 0, finalB = 0;
+
+        // Calcular la luz de cada antorcha en este punto de la pared
+        if (cell !== 0) {
+            let totalLightR = 0, totalLightG = 0, totalLightB = 0;
+            for (let torch of torches) {
+                let torchDist = Math.hypot(hitX - torch.x, hitY - torch.y);
+                if (torchDist < 3) { // Rango de la antorcha
+                    let intensity = 1 - (torchDist / 3);
+                    // Color de la antorcha (Fuego: Naranja/Amarillo)
+                    totalLightR += intensity * 255;
+                    totalLightG += intensity * 150;
+                    totalLightB += intensity * 50;
+                }
+            }
+            // Mezclar luz de antorcha con color de pared
+            finalR = (baseR * 0.3) + (totalLightR * 0.7);
+            finalG = (baseG * 0.3) + (totalLightG * 0.7);
+            finalB = (baseB * 0.3) + (totalLightB * 0.7);
+        }
+
+        // Aplicar oscuridad por distancia general
+        let dim = Math.max(0, 1 - dist/8);
+        ctx.fillStyle = `rgb(${finalR * dim}, ${finalG * dim}, ${finalB * dim})`;
+
+        // Cambios especiales para la salida final
+        if (cell === 9 && vistos.size >= totalCuadros) {
+            ctx.fillStyle = `rgb(${200 * dim}, 0, 0)`; // Puerta brilla rojo
+        }
+
+        ctx.fillRect(i * (canvas.width/numRays), (canvas.height - h)/2, (canvas.width/numRays)+1, h);
+        if(i === Math.floor(numRays/2) && cell > 1 && dist < 1.1) lookingAt = cell;
+    }
+    document.getElementById("interaction").style.display = (lookingAt && (lookingAt !== 9 || vistos.size >= totalCuadros)) ? "block" : "none";
+}
+
+function updateMinimap() {
+    const s = 100 / map.length;
+    mtx.clearRect(0,0,100,100);
+    for(let y=0; y<map.length; y++) {
+        for(let x=0; x<map[y].length; x++) {
+            if(map[y][x] === 1) mtx.fillStyle = "#444";
+            else if(map[y][x] > 1 && map[y][x] < 9) mtx.fillStyle = vistos.has(map[y][x]) ? "#200" : "#f00";
+            else if(map[y][x] === 9) mtx.fillStyle = (vistos.size >= totalCuadros) ? "#0f0" : "#200";
+            else mtx.fillStyle = "#111";
+            mtx.fillRect(x*s, y*s, s, s);
+        }
+    }
+    // Antorchas en minimapa (puntos naranjas)
+    mtx.fillStyle = "#ffaa00";
+    for(let torch of torches) {
+        mtx.fillRect(torch.x*s-1, torch.y*s-1, 2, 2);
+    }
+    // Jugador en minimapa
+    mtx.fillStyle = "white";
+    mtx.fillRect(player.x*s-1, player.y*s-1, 3, 3);
+}
+
+function loop() {
+    if(!gameActive) return;
+
+    // Lógica Stamina y Movimiento
+    let currentSpeed = player.speed;
+    if (keys["shift"] && player.stamina > 0 && (keys["w"] || keys["s"])) {
+        currentSpeed *= 1.8;
+        player.stamina -= 0.6;
+    } else {
+        player.stamina = Math.min(100, player.stamina + 0.3);
+    }
+    document.getElementById("staminaBar").style.width = player.stamina + "%";
+
+    let nx = player.x, ny = player.y;
+    if (keys["w"]) { nx += Math.cos(player.angle) * currentSpeed; ny += Math.sin(player.angle) * currentSpeed; }
+    if (keys["s"]) { nx -= Math.cos(player.angle) * currentSpeed; ny -= Math.sin(player.angle) * currentSpeed; }
+    if (keys["a"]) player.angle -= 0.045;
+    if (keys["d"]) player.angle += 0.045;
+
+    let targetCell = map[Math.floor(ny)][Math.floor(nx)];
+    // Bloqueo físico de la salida hasta tener todos los cuadros
+    if (targetCell === 0 || (targetCell === 9 && vistos.size >= totalCuadros)) {
+        player.x = nx; player.y = ny;
+    }
+
+    draw();
+    updateMinimap();
+    requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
